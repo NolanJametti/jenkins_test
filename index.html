@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Dog Runner</title>
+  <style>
+    html, body { margin:0; padding:0; background:transparent; overflow:hidden; width:100%; height:100%; }
+    img {
+      position: absolute;
+      bottom: -59px;
+      right: -200px; /* commence hors écran à droite */
+      height: 200px;
+      animation: none; /* animation contrôlée par JS */
+    }
+    img.running {
+      animation: run-back 5s linear;
+    }
+    @keyframes run-back {
+      0% { right: -200px; }
+      100% { right: 100vw; }
+    }
+  </style>
+</head>
+<body>
+  <img id="dog" src="assets/dog.gif" alt="Chien courant">
+  
+  <script>
+    const dog = document.getElementById('dog');
+    let currentTimeout = null; // Pour pouvoir annuler le timeout en cours
+    
+    function startAnimation() {
+      // Ajoute la classe pour démarrer l'animation
+      dog.classList.add('running');
+      
+      // Retire la classe après 5 secondes (durée de l'animation)
+      setTimeout(() => {
+        dog.classList.remove('running');
+        scheduleNextAnimation();
+      }, 5000);
+    }
+    
+    function scheduleNextAnimation() {
+      // Annule le timeout précédent s'il existe
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
+      }
+      
+      // Génère un délai aléatoire entre 10 et 15 minutes (en millisecondes)
+      const minDelay = 10 * 60 * 1000; // 10 minutes
+      const maxDelay = 15 * 60 * 1000; // 15 minutes
+      const randomDelay = Math.random() * (maxDelay - minDelay) + minDelay;
+      
+      console.log(`Prochaine animation dans ${Math.round(randomDelay / 60000)} minutes`);
+      
+      currentTimeout = setTimeout(() => {
+        startAnimation();
+      }, randomDelay);
+    }
+    
+    function callSpike() {
+      console.log('Spike a été appelé !');
+      // Annule le timeout en cours
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
+      }
+      // Lance immédiatement une animation
+      startAnimation();
+    }
+    
+    // Écoute les messages du processus principal
+    if (window.electronAPI) {
+      window.electronAPI.onCallSpike(() => {
+        callSpike();
+      });
+    }
+    
+    // Démarre la première animation immédiatement au lancement
+    startAnimation();
+  </script>
+</body>
+</html>
