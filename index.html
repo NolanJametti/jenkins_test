@@ -7,7 +7,7 @@
     html, body { margin:0; padding:0; background:transparent; overflow:hidden; width:100%; height:100%; }
     img {
       position: absolute;
-      bottom: -59px;
+      bottom: -3px;
       right: -200px; /* commence hors écran à droite */
       height: 200px;
       animation: none; /* animation contrôlée par JS */
@@ -15,37 +15,184 @@
     img.running {
       animation: run-back 5s linear;
     }
+    img.walking {
+      animation: walk-to-position 3s linear;
+    }
+    img.sitting {
+      /* Position statique quand assis */
+      position: absolute;
+    }
     @keyframes run-back {
       0% { right: -200px; }
       100% { right: 100vw; }
     }
+    @keyframes walk-to-position {
+      /* Animation dynamique définie par JS */
+    }
   </style>
 </head>
 <body>
-  <img id="dog" src="assets/Spike_course.gif" alt="Chien courant">
+  <img id="dog" src="assets/Spike_course_gauche.gif" alt="Chien courant">
   
   <script>
     const dog = document.getElementById('dog');
-    let currentTimeout = null; // Pour pouvoir annuler le timeout en cours
-    
-    function startAnimation() {
-      // Ajoute la classe pour démarrer l'animation
+    let currentTimeout = null;
+    let isInteractiveMode = false;
+    let currentState = 'idle';
+    let currentPosition = { right: -200 };
+
+    // États possibles et leurs GIFs par direction
+    const states = {
+      course_gauche: 'assets/Spike_course_gauche.gif',
+      course_droite: 'assets/Spike_course_droite.gif',
+      marche_gauche: 'assets/Spike_marche_gauche.gif',
+      marche_droite: 'assets/Spike_marche_droite.gif',
+      assis_droit: 'assets/Spike_assi_droit.gif',
+      assis_respi: 'assets/Spike_assi_droit_respi.gif'
+    };
+
+    // Fonction pour obtenir le bon GIF selon la direction
+    function getDirectionalGif(baseState, fromPosition, toPosition) {
+      if (baseState === 'assis_droit' || baseState === 'assis_respi') {
+        return states[baseState]; // Les états assis n'ont pas de direction
+      }
+      
+      // Détermine la direction : si toPosition > fromPosition, va vers la gauche
+      const direction = toPosition > fromPosition ? 'gauche' : 'droite';
+      return states[`${baseState}_${direction}`];
+    }
+
+    // Règles de transition (utilise les noms de base, la direction sera ajoutée dynamiquement)
+    const transitions = {
+      course: ['marche'],
+      marche: ['assis_respi', 'assis_droit', 'course'],
+      assis_droit: ['marche', 'assis_respi'],
+      assis_respi: ['assis_droit', 'marche']
+    };
+
+    // Constantes de vitesse (pixels/seconde)
+    const RUNNING_SPEED = 400; // vitesse de course
+    const WALKING_SPEED = 100; // vitesse de marche
+
+    // Utilitaires
+    function getRandomDuration() {
+      return Math.random() * (15000 - 2000) + 2000; // 2-15 secondes (pour les états assis)
+    }
+
+    function getRandomPosition() {
+      const windowWidth = window.innerWidth;
+      const dogWidth = 200; // largeur approximative du chien
+      const margin = 50; // marge pour éviter les bords
+      return Math.random() * (windowWidth - dogWidth - 2 * margin) + margin;
+    }
+
+    function calculateAnimationDuration(fromPosition, toPosition, speed) {
+      const distance = Math.abs(toPosition - fromPosition);
+      return distance / speed * 1000; // en millisecondes
+    }
+
+    function getCurrentDirection() {
+      // Détermine la direction actuelle basée sur l'état et le GIF
+      if (currentState.includes('_droite')) return 'droite';
+      if (currentState.includes('_gauche')) return 'gauche';
+      return 'gauche'; // par défaut
+    }
+
+    function changeState(newState, fromPosition = null, toPosition = null) {
+      currentState = newState;
+      
+      if (fromPosition !== null && toPosition !== null) {
+        dog.src = getDirectionalGif(newState, fromPosition, toPosition);
+      } else {
+        // Pour les états statiques ou quand on n'a pas les positions
+        dog.src = states[newState] || states[`${newState}_gauche`] || states[newState];
+      }
+      
+      console.log(`État changé vers: ${newState}, GIF: ${dog.src}`);
+    }
+
+    function getNextState(currentState) {
+      // Utilise le nom de base de l'état (sans direction)
+      const baseState = currentState.replace(/_gauche|_droite/, '');
+      const possibleStates = transitions[baseState];
+      return possibleStates[Math.floor(Math.random() * possibleStates.length)];
+    }
+
+    function createWalkAnimation(targetPosition, speed = WALKING_SPEED) {
+      const duration = calculateAnimationDuration(currentPosition.right, targetPosition, speed);
+      
+      const keyframes = `
+        @keyframes walk-to-position {
+          0% { right: ${currentPosition.right}px; }
+          100% { right: ${targetPosition}px; }
+        }
+      `;
+      
+      // Supprime l'ancienne règle d'animation
+      const oldStyle = document.querySelector('#dynamic-walk-style');
+      if (oldStyle) oldStyle.remove();
+      
+      // Ajoute la nouvelle règle
+      const style = document.createElement('style');
+      style.id = 'dynamic-walk-style';
+      style.textContent = keyframes;
+      document.head.appendChild(style);
+      
+      return duration; // Retourne la durée calculée
+    }
+
+    function createRunAnimation(targetPosition, speed = RUNNING_SPEED) {
+      const duration = calculateAnimationDuration(currentPosition.right, targetPosition, speed);
+      
+      const keyframes = `
+        @keyframes run-to-position {
+          0% { right: ${currentPosition.right}px; }
+          100% { right: ${targetPosition}px; }
+        }
+      `;
+      
+      // Supprime l'ancienne règle d'animation
+      const oldStyle = document.querySelector('#dynamic-course-style');
+      if (oldStyle) oldStyle.remove();
+      
+      // Ajoute la nouvelle règle
+      const style = document.createElement('style');
+      style.id = 'dynamic-course-style';
+      style.textContent = keyframes;
+      document.head.appendChild(style);
+      
+      return duration; // Retourne la durée calculée
+    }
+
+    // Mode automatique (actuel)
+    function startAutomaticAnimation() {
+      if (isInteractiveMode) return;
+      
+      dog.classList.remove('walking', 'sitting');
       dog.classList.add('running');
       
-      // Retire la classe après 5 secondes (durée de l'animation)
+      // Course de droite à gauche (toujours vers la gauche)
+      const fromPos = -200;
+      const toPos = window.innerWidth + 200;
+      const duration = calculateAnimationDuration(fromPos, toPos, RUNNING_SPEED);
+      
+      changeState('course', fromPos, toPos);
+      currentPosition.right = fromPos;
+      
       setTimeout(() => {
         dog.classList.remove('running');
+        currentPosition.right = toPos;
         scheduleNextAnimation();
-      }, 5000);
+      }, duration);
     }
-    
+
     function scheduleNextAnimation() {
-      // Annule le timeout précédent s'il existe
+      if (isInteractiveMode) return;
+      
       if (currentTimeout) {
         clearTimeout(currentTimeout);
       }
       
-      // Génère un délai aléatoire entre 10 et 15 minutes (en millisecondes)
       const minDelay = 10 * 60 * 1000; // 10 minutes
       const maxDelay = 15 * 60 * 1000; // 15 minutes
       const randomDelay = Math.random() * (maxDelay - minDelay) + minDelay;
@@ -53,29 +200,237 @@
       console.log(`Prochaine animation dans ${Math.round(randomDelay / 60000)} minutes`);
       
       currentTimeout = setTimeout(() => {
-        startAnimation();
+        startAutomaticAnimation();
       }, randomDelay);
     }
-    
-    function callSpike() {
-      console.log('Spike a été appelé !');
-      // Annule le timeout en cours
+
+    // Mode interactif "Viens ici"
+    function startInteractiveSequence() {
+      isInteractiveMode = true;
+      
       if (currentTimeout) {
         clearTimeout(currentTimeout);
       }
-      // Lance immédiatement une animation
-      startAnimation();
+      
+      // Phase 1: Course vers une position aléatoire
+      dog.classList.remove('walking', 'sitting');
+      dog.classList.add('running');
+      
+      const targetPosition = getRandomPosition();
+      const duration = createRunAnimation(targetPosition);
+      
+      // Course de la droite vers la position cible (généralement vers la gauche)
+      changeState('course', -200, targetPosition);
+      currentPosition.right = -200;
+      
+      dog.style.animation = `run-to-position ${duration / 1000}s linear`;
+      
+      setTimeout(() => {
+        dog.classList.remove('running');
+        dog.style.animation = 'none';
+        currentPosition.right = targetPosition;
+        dog.style.right = `${targetPosition}px`;
+        
+        // Phase 2: Transition vers la marche
+        continueInteractiveSequence();
+      }, duration);
+    }
+
+    function continueInteractiveSequence() {
+      if (!isInteractiveMode) return;
+      
+      const stateDuration = getRandomDuration(); // Durée pour les états assis
+      const nextState = getNextState(currentState);
+      
+      console.log(`Transition vers ${nextState} pour ${Math.round(stateDuration/1000)}s`);
+      
+      if (nextState === 'marche') {
+        // Se déplacer pendant la marche
+        const newPosition = getRandomPosition();
+        const movementDuration = createWalkAnimation(newPosition);
+        
+        dog.classList.remove('running', 'sitting');
+        dog.classList.add('walking');
+        // Marche avec direction basée sur le déplacement
+        changeState(nextState, currentPosition.right, newPosition);
+        
+        // Appliquer l'animation de déplacement
+        dog.style.animation = `walk-to-position ${movementDuration / 1000}s linear`;
+        
+        setTimeout(() => {
+          dog.classList.remove('walking');
+          dog.style.animation = 'none';
+          currentPosition.right = newPosition;
+          dog.style.right = `${newPosition}px`;
+          continueInteractiveSequence();
+        }, movementDuration);
+        
+      } else if (nextState === 'course') {
+        // Course vers une nouvelle position
+        const newPosition = getRandomPosition();
+        const movementDuration = createRunAnimation(newPosition);
+        
+        dog.classList.remove('walking', 'sitting');
+        dog.classList.add('running');
+        dog.style.animation = `run-to-position ${movementDuration / 1000}s linear`;
+        // Course avec direction basée sur le déplacement
+        changeState(nextState, currentPosition.right, newPosition);
+        
+        setTimeout(() => {
+          dog.classList.remove('running');
+          dog.style.animation = 'none';
+          currentPosition.right = newPosition;
+          dog.style.right = `${newPosition}px`;
+          continueInteractiveSequence();
+        }, movementDuration);
+        
+      } else {
+        // États assis (statiques)
+        dog.classList.remove('running', 'walking');
+        dog.classList.add('sitting');
+        // États assis n'ont pas de direction
+        changeState(nextState, null, null);
+        
+        setTimeout(() => {
+          continueInteractiveSequence();
+        }, stateDuration);
+      }
+    }
+
+    function stopInteractiveMode() {
+      // Cette fonction n'est plus utilisée, remplacée par dismissSpike
+      console.log('Mode interactif arrêté directement');
+      isInteractiveMode = false;
+      currentState = 'idle';
+      
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
+      }
+      
+      // Remettre le chien en position initiale
+      dog.classList.remove('running', 'walking', 'sitting');
+      dog.style.animation = 'none';
+      dog.style.right = '-200px';
+      dog.src = states.course_gauche;
+      currentPosition.right = -200;
+      
+      scheduleNextAnimation();
+    }
+
+    // Fonctions appelées depuis le main process
+    function callSpike() {
+      console.log('Spike ! (course simple)');
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
+      }
+      // Lance immédiatement une animation de course simple (ancien comportement)
+      startAutomaticAnimation();
+    }
+
+    function comeHere() {
+      console.log('Viens ici ! (scénario interactif)');
+      startInteractiveSequence();
+    }
+
+    function dismissSpike() {
+      console.log('Oust ! Spike s\'en va...');
+      isInteractiveMode = false;
+      
+      if (currentTimeout) {
+        clearTimeout(currentTimeout);
+      }
+      
+      // Vérifier la direction actuelle et l'état
+      const currentDirection = getCurrentDirection();
+      const isSeated = currentState === 'assis_droit' || currentState === 'assis_respi';
+      
+      if (currentDirection === 'droite' || isSeated) {
+        // Il faut d'abord marcher vers la gauche pendant 1 seconde
+        console.log('Demi-tour nécessaire, marche vers la gauche...');
+        
+        dog.classList.remove('running', 'sitting');
+        dog.classList.add('walking');
+        
+        // Position intermédiaire pour le demi-tour (un peu vers la gauche)
+        const intermediatePosition = currentPosition.right + 100; // 100px vers la gauche
+        const walkDuration = 1000; // 1 seconde fixe
+        
+        // Créer animation de marche vers la gauche
+        const walkKeyframes = `
+          @keyframes turn-around-walk {
+            0% { right: ${currentPosition.right}px; }
+            100% { right: ${intermediatePosition}px; }
+          }
+        `;
+        
+        const oldStyle = document.querySelector('#turn-around-style');
+        if (oldStyle) oldStyle.remove();
+        
+        const style = document.createElement('style');
+        style.id = 'turn-around-style';
+        style.textContent = walkKeyframes;
+        document.head.appendChild(style);
+        
+        // Marche vers la gauche
+        changeState('marche', currentPosition.right, intermediatePosition);
+        dog.style.animation = 'turn-around-walk 1s linear';
+        
+        setTimeout(() => {
+          // Après 1 seconde, commence la course vers la sortie
+          currentPosition.right = intermediatePosition;
+          startExitRun();
+        }, walkDuration);
+        
+      } else {
+        // Déjà orienté vers la gauche, course directement
+        startExitRun();
+      }
     }
     
+    function startExitRun() {
+      // Course vers la sortie (complètement à gauche de l'écran)
+      const exitPosition = window.innerWidth + 200; // Sort complètement de l'écran
+      const runDuration = createRunAnimation(exitPosition);
+      
+      dog.classList.remove('walking', 'sitting');
+      dog.classList.add('running');
+      
+      // Course vers la gauche pour sortir
+      changeState('course', currentPosition.right, exitPosition);
+      dog.style.animation = `run-to-position ${runDuration / 1000}s linear`;
+      
+      setTimeout(() => {
+        // Une fois sorti, remet en position initiale et retourne au mode automatique
+        dog.classList.remove('running');
+        dog.style.animation = 'none';
+        dog.style.right = '-200px';
+        dog.src = states.course_gauche;
+        currentPosition.right = -200;
+        currentState = 'idle';
+        
+        console.log('Spike est parti, retour au mode automatique');
+        scheduleNextAnimation();
+      }, runDuration);
+    }
+
     // Écoute les messages du processus principal
     if (window.electronAPI) {
       window.electronAPI.onCallSpike(() => {
         callSpike();
       });
+      
+      window.electronAPI.onComeHere(() => {
+        comeHere();
+      });
+      
+      // Nouvelle fonction pour "Oust !"
+      window.electronAPI.onDismissSpike(() => {
+        dismissSpike();
+      });
     }
-    
+
     // Démarre la première animation immédiatement au lancement
-    startAnimation();
+    startAutomaticAnimation();
   </script>
 </body>
 </html>
