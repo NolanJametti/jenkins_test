@@ -41,6 +41,14 @@ function createWindow() {
     .catch(err => console.error('Erreur loadFile:', err));
 }
 
+function createDebugWindow() {
+  if (win && !win.isDestroyed()) {
+    // Ouvre les DevTools en mode détaché (fenêtre séparée)
+    win.webContents.openDevTools({ mode: 'detach' });
+    console.log('DevTools ouverts en mode détaché');
+  }
+}
+
 function updateTrayMenu() {
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -72,6 +80,13 @@ function updateTrayMenu() {
           }
           updateTrayMenu(); // Met à jour le menu après le changement
         }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '🐛 Ouvrir Console Debug',
+      click: () => {
+        createDebugWindow();
       }
     },
     {

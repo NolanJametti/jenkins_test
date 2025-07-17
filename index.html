@@ -64,7 +64,7 @@
 
     // Règles de transition (utilise les noms de base, la direction sera ajoutée dynamiquement)
     const transitions = {
-      course: ['marche'],
+      course: ['marche', 'course'],
       marche: ['assis_respi', 'assis_droit', 'course'],
       assis_droit: ['marche', 'assis_respi'],
       assis_respi: ['assis_droit', 'marche']
@@ -98,6 +98,39 @@
       return 'gauche'; // par défaut
     }
 
+    function getTargetDirection(fromPosition, toPosition) {
+      // Détermine la direction vers laquelle on veut aller
+      return toPosition > fromPosition ? 'gauche' : 'droite';
+    }
+
+    function needsDirectionChange(currentDirection, targetDirection) {
+      // Vérifie si un changement de direction est nécessaire
+      return currentDirection !== targetDirection;
+    }
+
+    function createTurnAroundAnimation(intermediatePosition, animationName = 'turn-around') {
+      const duration = 500; // 0.5 seconde fixe pour les demi-tours
+      
+      const keyframes = `
+        @keyframes ${animationName} {
+          0% { right: ${currentPosition.right}px; }
+          100% { right: ${intermediatePosition}px; }
+        }
+      `;
+      
+      // Supprime l'ancienne règle d'animation de demi-tour
+      const oldStyle = document.querySelector(`#${animationName}-style`);
+      if (oldStyle) oldStyle.remove();
+      
+      // Ajoute la nouvelle règle
+      const style = document.createElement('style');
+      style.id = `${animationName}-style`;
+      style.textContent = keyframes;
+      document.head.appendChild(style);
+      
+      return duration;
+    }
+
     function changeState(newState, fromPosition = null, toPosition = null) {
       currentState = newState;
       
@@ -105,7 +138,13 @@
         dog.src = getDirectionalGif(newState, fromPosition, toPosition);
       } else {
         // Pour les états statiques ou quand on n'a pas les positions
-        dog.src = states[newState] || states[`${newState}_gauche`] || states[newState];
+        if (states[newState]) {
+          // État exact trouvé (ex: assis_droit)
+          dog.src = states[newState];
+        } else {
+          // Essaie avec _gauche par défaut pour les états de mouvement
+          dog.src = states[`${newState}_gauche`] || states.course_gauche;
+        }
       }
       
       console.log(`État changé vers: ${newState}, GIF: ${dog.src}`);
@@ -151,6 +190,9 @@
         }
       `;
       
+      console.log(`Animation course: de right=${currentPosition.right}px vers right=${targetPosition}px`);
+      console.log(`Mouvement visuel: ${currentPosition.right < targetPosition ? 'va vers la GAUCHE' : 'va vers la DROITE'}`);
+      
       // Supprime l'ancienne règle d'animation
       const oldStyle = document.querySelector('#dynamic-course-style');
       if (oldStyle) oldStyle.remove();
@@ -162,6 +204,168 @@
       document.head.appendChild(style);
       
       return duration; // Retourne la durée calculée
+    }
+
+    // Fonction pour gérer les transitions avec demi-tours
+    function executeMovementWithTurning(targetState, targetPosition, callback) {
+      const currentDirection = getCurrentDirection();
+      const targetDirection = getTargetDirection(currentPosition.right, targetPosition);
+      const currentBaseState = currentState.replace(/_gauche|_droite/, '');
+      
+      console.log(`Mouvement: ${currentBaseState}_${currentDirection} vers ${targetState}_${targetDirection}`);
+      
+      // Si on est assis, on doit toujours faire une transition
+      if (currentBaseState === 'assis_droit' || currentBaseState === 'assis_respi') {
+        console.log('Transition depuis état assis, demi-tour nécessaire !');
+        executeTurnAroundSequence(targetState, targetPosition, currentDirection, targetDirection, callback);
+      } else if (!needsDirectionChange(currentDirection, targetDirection)) {
+        // Pas de changement de direction nécessaire, mouvement direct
+        executeDirectMovement(targetState, targetPosition, callback);
+      } else {
+        // Changement de direction nécessaire, faire le demi-tour
+        console.log('Demi-tour nécessaire !');
+        executeTurnAroundSequence(targetState, targetPosition, currentDirection, targetDirection, callback);
+      }
+    }
+
+    function executeDirectMovement(targetState, targetPosition, callback) {
+      if (targetState === 'marche') {
+        const movementDuration = createWalkAnimation(targetPosition);
+        
+        dog.classList.remove('running', 'sitting');
+        dog.classList.add('walking');
+        changeState(targetState, currentPosition.right, targetPosition);
+        
+        dog.style.animation = `walk-to-position ${movementDuration / 1000}s linear`;
+        
+        setTimeout(() => {
+          dog.classList.remove('walking');
+          dog.style.animation = 'none';
+          currentPosition.right = targetPosition;
+          dog.style.right = `${targetPosition}px`;
+          callback();
+        }, movementDuration);
+        
+      } else if (targetState === 'course') {
+        const movementDuration = createRunAnimation(targetPosition);
+        
+        dog.classList.remove('walking', 'sitting');
+        dog.classList.add('running');
+        changeState(targetState, currentPosition.right, targetPosition);
+        
+        dog.style.animation = `run-to-position ${movementDuration / 1000}s linear`;
+        
+        setTimeout(() => {
+          dog.classList.remove('running');
+          dog.style.animation = 'none';
+          currentPosition.right = targetPosition;
+          dog.style.right = `${targetPosition}px`;
+          callback();
+        }, movementDuration);
+      }
+    }
+
+    function executeTurnAroundSequence(targetState, targetPosition, currentDirection, targetDirection, callback) {
+      const currentBaseState = currentState.replace(/_gauche|_droite/, '');
+      
+      if (currentBaseState === 'course') {
+        // Course -> Course avec demi-tour : course_dir1 -> marche_dir1 (0.5s) -> marche_dir2 (0.5s) -> course_dir2
+        executeCourseToCourseTurn(targetState, targetPosition, currentDirection, targetDirection, callback);
+      } else if (currentBaseState === 'marche') {
+        if (targetState === 'course') {
+          // Marche -> Course avec demi-tour : marche_dir1 -> marche_dir2 (0.5s) -> course_dir2
+          executeMarcheToCourse(targetPosition, targetDirection, callback);
+        } else {
+          // Marche -> Marche avec demi-tour : marche_dir1 -> marche_dir2 (0.5s) -> continuer marche_dir2
+          executeMarcheToMarche(targetPosition, targetDirection, callback);
+        }
+      } else if (currentBaseState === 'assis_droit' || currentBaseState === 'assis_respi') {
+        // États assis -> mouvement : d'abord se lever en marche, puis continuer
+        executeAssisToCourse(targetState, targetPosition, targetDirection, callback);
+      }
+    }
+
+    function executeCourseToCourseTurn(targetState, targetPosition, currentDirection, targetDirection, callback) {
+      // Phase 1: Ralentir à la marche dans la direction actuelle (0.5s)
+      const intermediatePos1 = currentPosition.right + (currentDirection === 'gauche' ? 50 : -50);
+      const duration1 = createTurnAroundAnimation(intermediatePos1, 'turn-phase1');
+      
+      dog.classList.remove('running', 'sitting');
+      dog.classList.add('walking');
+      changeState('marche', currentPosition.right, intermediatePos1);
+      dog.style.animation = 'turn-phase1 0.5s linear';
+      
+      setTimeout(() => {
+        currentPosition.right = intermediatePos1;
+        
+        // Phase 2: Marcher dans la direction opposée (0.5s)
+        const intermediatePos2 = intermediatePos1 + (targetDirection === 'gauche' ? 50 : -50);
+        const duration2 = createTurnAroundAnimation(intermediatePos2, 'turn-phase2');
+        
+        changeState('marche', intermediatePos1, intermediatePos2);
+        dog.style.animation = 'turn-phase2 0.5s linear';
+        
+        setTimeout(() => {
+          currentPosition.right = intermediatePos2;
+          dog.style.animation = 'none';
+          
+          // Phase 3: Accélérer vers la course jusqu'à la position finale
+          executeDirectMovement(targetState, targetPosition, callback);
+        }, 500);
+      }, 500);
+    }
+
+    function executeMarcheToCourse(targetPosition, targetDirection, callback) {
+      // Marche -> Course : marche_dir1 -> marche_dir2 (0.5s) -> course_dir2
+      const intermediatePos = currentPosition.right + (targetDirection === 'gauche' ? 50 : -50);
+      const duration = createTurnAroundAnimation(intermediatePos, 'marche-turn');
+      
+      changeState('marche', currentPosition.right, intermediatePos);
+      dog.style.animation = 'marche-turn 0.5s linear';
+      
+      setTimeout(() => {
+        currentPosition.right = intermediatePos;
+        dog.style.animation = 'none';
+        
+        // Maintenant course vers la position finale
+        executeDirectMovement('course', targetPosition, callback);
+      }, 500);
+    }
+
+    function executeMarcheToMarche(targetPosition, targetDirection, callback) {
+      // Marche -> Marche : marche_dir1 -> marche_dir2 (0.5s) -> continuer vers position finale
+      const intermediatePos = currentPosition.right + (targetDirection === 'gauche' ? 50 : -50);
+      const duration = createTurnAroundAnimation(intermediatePos, 'marche-to-marche');
+      
+      changeState('marche', currentPosition.right, intermediatePos);
+      dog.style.animation = 'marche-to-marche 0.5s linear';
+      
+      setTimeout(() => {
+        currentPosition.right = intermediatePos;
+        dog.style.animation = 'none';
+        
+        // Continuer la marche vers la position finale
+        executeDirectMovement('marche', targetPosition, callback);
+      }, 500);
+    }
+
+    function executeAssisToCourse(targetState, targetPosition, targetDirection, callback) {
+      // États assis -> mouvement : d'abord marcher dans la bonne direction (0.5s), puis continuer
+      const intermediatePos = currentPosition.right + (targetDirection === 'gauche' ? 50 : -50);
+      const duration = createTurnAroundAnimation(intermediatePos, 'assis-to-move');
+      
+      dog.classList.remove('running', 'sitting');
+      dog.classList.add('walking');
+      changeState('marche', currentPosition.right, intermediatePos);
+      dog.style.animation = 'assis-to-move 0.5s linear';
+      
+      setTimeout(() => {
+        currentPosition.right = intermediatePos;
+        dog.style.animation = 'none';
+        
+        // Maintenant continuer vers l'état et position finaux
+        executeDirectMovement(targetState, targetPosition, callback);
+      }, 500);
     }
 
     // Mode automatique (actuel)
@@ -216,12 +420,27 @@
       dog.classList.remove('walking', 'sitting');
       dog.classList.add('running');
       
-      const targetPosition = getRandomPosition();
-      const duration = createRunAnimation(targetPosition);
+      // IMPORTANT: Pour "Viens ici", Spike doit TOUJOURS partir de la droite (-200)
+      // On force le reset de position pour garantir la cohérence
+      const startPosition = -200;
+      const windowWidth = window.innerWidth;
+      const dogWidth = 200;
+      const margin = 50;
+      const targetPosition = Math.random() * (windowWidth - dogWidth - 2 * margin) + margin;
       
-      // Course de la droite vers la position cible (généralement vers la gauche)
-      changeState('course', -200, targetPosition);
-      currentPosition.right = -200;
+      console.log(`RESET pour Viens ici: position actuelle ${currentPosition.right} → position de départ ${startPosition}`);
+      console.log(`Position cible: ${targetPosition}`);
+      
+      // Reset complet de la position de départ
+      currentPosition.right = startPosition;
+      dog.style.right = `${startPosition}px`;
+      dog.style.animation = 'none'; // Annule toute animation en cours
+      
+      // Maintenant créer l'animation avec la position correcte
+      const duration = createRunAnimation(targetPosition);
+      changeState('course', startPosition, targetPosition);
+      
+      console.log(`Viens ici: course de droite (${startPosition}) vers position ${targetPosition}`);
       
       dog.style.animation = `run-to-position ${duration / 1000}s linear`;
       
@@ -239,58 +458,35 @@
     function continueInteractiveSequence() {
       if (!isInteractiveMode) return;
       
-      const stateDuration = getRandomDuration(); // Durée pour les états assis
       const nextState = getNextState(currentState);
       
-      console.log(`Transition vers ${nextState} pour ${Math.round(stateDuration/1000)}s`);
+      console.log(`Transition vers ${nextState}`);
       
       if (nextState === 'marche') {
-        // Se déplacer pendant la marche
+        // Se déplacer pendant la marche avec gestion du demi-tour
         const newPosition = getRandomPosition();
-        const movementDuration = createWalkAnimation(newPosition);
-        
-        dog.classList.remove('running', 'sitting');
-        dog.classList.add('walking');
-        // Marche avec direction basée sur le déplacement
-        changeState(nextState, currentPosition.right, newPosition);
-        
-        // Appliquer l'animation de déplacement
-        dog.style.animation = `walk-to-position ${movementDuration / 1000}s linear`;
-        
-        setTimeout(() => {
-          dog.classList.remove('walking');
-          dog.style.animation = 'none';
-          currentPosition.right = newPosition;
-          dog.style.right = `${newPosition}px`;
+        executeMovementWithTurning(nextState, newPosition, () => {
+          // ✅ CORRECT: Enchaîner directement après le mouvement
           continueInteractiveSequence();
-        }, movementDuration);
+        });
         
       } else if (nextState === 'course') {
-        // Course vers une nouvelle position
+        // Course vers une nouvelle position avec gestion du demi-tour
         const newPosition = getRandomPosition();
-        const movementDuration = createRunAnimation(newPosition);
-        
-        dog.classList.remove('walking', 'sitting');
-        dog.classList.add('running');
-        dog.style.animation = `run-to-position ${movementDuration / 1000}s linear`;
-        // Course avec direction basée sur le déplacement
-        changeState(nextState, currentPosition.right, newPosition);
-        
-        setTimeout(() => {
-          dog.classList.remove('running');
-          dog.style.animation = 'none';
-          currentPosition.right = newPosition;
-          dog.style.right = `${newPosition}px`;
+        executeMovementWithTurning(nextState, newPosition, () => {
+          // ✅ CORRECT: Enchaîner directement après le mouvement
           continueInteractiveSequence();
-        }, movementDuration);
+        });
         
       } else {
-        // États assis (statiques)
+        // États assis (statiques) - SEULS CES ÉTATS utilisent une pause
+        const stateDuration = getRandomDuration(); // 2-15 secondes pour les états assis
+        
         dog.classList.remove('running', 'walking');
         dog.classList.add('sitting');
-        // États assis n'ont pas de direction
         changeState(nextState, null, null);
         
+        console.log(`État assis ${nextState}, attente ${Math.round(stateDuration/1000)}s`);
         setTimeout(() => {
           continueInteractiveSequence();
         }, stateDuration);
