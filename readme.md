@@ -14,3 +14,4 @@ npm run pack-win
 
 - Copier le dist or du WSL
 - Ouvrir le dist et executer le script `spike.exe`
+
