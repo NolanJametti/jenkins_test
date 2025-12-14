@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         CI = "true"
-        DOCKER_IMAGE = "name/spikeapp"
+        DOCKER_IMAGE = "jamettinolan/spikeapp"
     }
 
     tools {
