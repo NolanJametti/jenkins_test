@@ -1,14 +1,14 @@
 pipeline {
-    agent {
-        docker {
-            image 'node:18'
-            args '-u root:root'
-        }
-    }
+    agent any
 
     environment {
         CI = "true"
     }
+
+    tools {
+        nodejs 'node-18'
+    }
+
 
     stages {
         stage('Checkout') {
@@ -27,6 +27,15 @@ pipeline {
             steps {
                 sh 'npm test'
             }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Build et tests OK'
+        }
+        failure {
+            echo '❌ Les tests ont échoué'
         }
     }
 }
