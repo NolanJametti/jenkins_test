@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'node:18'
+            args '-u root:root'
+        }
+    }
 
     environment {
         CI = "true"
@@ -22,15 +27,6 @@ pipeline {
             steps {
                 sh 'npm test'
             }
-        }
-    }
-
-    post {
-        success {
-            echo '✅ Build et tests OK'
-        }
-        failure {
-            echo '❌ Les tests ont échoué'
         }
     }
 }
