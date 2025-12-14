@@ -14,4 +14,4 @@ console.log('5 + 7 = 12     : OK');
 assertEqual(addition(-1, 1), 0, '-1 + 1 doit faire 0');
 console.log('-1 + 1 = 0     : OK');
 
-console.log('✅ Tous les tests sont passés');
+console.log('✅ Tous les tests sont bien passés');
