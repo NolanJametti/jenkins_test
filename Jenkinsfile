@@ -59,6 +59,23 @@ pipeline {
             }
         }
 
+        stage('Push image to GitHub Container Registry') {
+            steps {
+                script {
+                    docker.withRegistry('https://ghcr.io', 'github-creds') {
+
+                        sh """
+                          docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${GHCR_IMAGE}:${BUILD_TAG}
+                          docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${GHCR_IMAGE}:latest
+                        """
+
+                        docker.image("${GHCR_IMAGE}:${BUILD_TAG}").push()
+                        docker.image("${GHCR_IMAGE}:latest").push()
+                    }
+                }
+            }
+        }
+
         stage('Tag Git repository') {
             steps {
                 withCredentials([usernamePassword(
