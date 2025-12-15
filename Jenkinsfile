@@ -61,20 +61,24 @@ pipeline {
 
         stage('Push image to GitHub Container Registry') {
             steps {
-                script {
-                    docker.withRegistry('https://ghcr.io', 'github-creds') {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GITHUB_USER',
+                    passwordVariable: 'GITHUB_TOKEN'
+                )]) {
+                    sh """
+                    echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
 
-                        sh """
-                        docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${env.GHCR_IMAGE}:${BUILD_TAG}
-                        docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${env.GHCR_IMAGE}:latest
-                        """
+                    docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ghcr.io/${GITHUB_USER}/spikeapp:${BUILD_TAG}
+                    docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ghcr.io/${GITHUB_USER}/spikeapp:latest
 
-                        docker.image("${env.GHCR_IMAGE}:${BUILD_TAG}").push()
-                        docker.image("${env.GHCR_IMAGE}:latest").push()
-                    }
+                    docker push ghcr.io/${GITHUB_USER}/spikeapp:${BUILD_TAG}
+                    docker push ghcr.io/${GITHUB_USER}/spikeapp:latest
+                    """
                 }
             }
         }
+
 
         stage('Tag Git repository') {
             steps {
