@@ -65,12 +65,12 @@ pipeline {
                     docker.withRegistry('https://ghcr.io', 'github-creds') {
 
                         sh """
-                          docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${GHCR_IMAGE}:${BUILD_TAG}
-                          docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${GHCR_IMAGE}:latest
+                        docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${env.GHCR_IMAGE}:${BUILD_TAG}
+                        docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ${env.GHCR_IMAGE}:latest
                         """
 
-                        docker.image("${GHCR_IMAGE}:${BUILD_TAG}").push()
-                        docker.image("${GHCR_IMAGE}:latest").push()
+                        docker.image("${env.GHCR_IMAGE}:${BUILD_TAG}").push()
+                        docker.image("${env.GHCR_IMAGE}:latest").push()
                     }
                 }
             }
