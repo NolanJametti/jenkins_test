@@ -61,16 +61,21 @@ pipeline {
 
         stage('Tag Git repository') {
             steps {
-                script {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-creds',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
                     sh """
-                      git config user.email "ci@jenkins"
-                      git config user.name "Jenkins CI"
-                      git tag v${BUILD_TAG}
-                      git push origin v${BUILD_TAG}
+                    git config user.email "ci@jenkins"
+                    git config user.name "Jenkins CI"
+                    git tag v${BUILD_TAG}
+                    git push https://${GIT_USER}:${GIT_TOKEN}@github.com/NolanJametti/jenkins_test.git v${BUILD_TAG}
                     """
                 }
             }
         }
+
     }
 
     post {
