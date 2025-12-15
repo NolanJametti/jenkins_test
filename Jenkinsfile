@@ -69,16 +69,15 @@ pipeline {
                     sh """
                     echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
 
-                    docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ghcr.io/${GITHUB_USER}/spikeapp:${BUILD_TAG}
-                    docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ghcr.io/${GITHUB_USER}/spikeapp:latest
+                    docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ghcr.io/nolanjametti/spikeapp:${BUILD_TAG}
+                    docker tag ${DOCKER_IMAGE}:${BUILD_TAG} ghcr.io/nolanjametti/spikeapp:latest
 
-                    docker push ghcr.io/${GITHUB_USER}/spikeapp:${BUILD_TAG}
-                    docker push ghcr.io/${GITHUB_USER}/spikeapp:latest
+                    docker push ghcr.io/nolanjametti/spikeapp:${BUILD_TAG}
+                    docker push ghcr.io/nolanjametti/spikeapp:latest
                     """
                 }
             }
         }
-
 
         stage('Tag Git repository') {
             steps {
